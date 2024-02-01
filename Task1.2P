@@ -1,0 +1,43 @@
+// Variable to store moisture level
+int moisture = 0;
+// Digital pin for the soil moisture sensor
+int sensorPin = 2;
+// Digital pin for the LED
+int LedPin = 8;
+
+//variable to constol the LED state
+int led=0;
+// Setup function runs once at the beginning
+void setup()
+{
+  // Set the sensor pin as INPUT to read the digital value from the soil moisture sensor
+  pinMode(sensorPin, INPUT);
+  
+  //Attach an interrupt to the sensor pin to detect changes in state(HIGH)
+  attachInterrupt(digitalPinToInterrupt(2), interruptHandler, HIGH);
+  // Initialize serial communication at 9600 baud rate for debugging
+  Serial.begin(9600);
+  // Set the pin for the LED pin as OUTPUT
+  pinMode(LedPin, OUTPUT);
+}
+
+// Loop function runs repeatedly
+void loop()
+{
+  // Read digital value from the soil moisture sensor
+  moisture = digitalRead(sensorPin);
+  // Print the moisture value to the Serial Monitor for debugging
+  Serial.println(moisture);
+  
+  //Update the state of LED based on the 'led' variable
+  digitalWrite(8,led);
+  
+
+  delay(100); // Wait for 100 milliseconds
+}
+
+// Interrupt handler function to toggle the state of the 'led' variable
+void interruptHandler(){
+  led=!led;
+}
+  
