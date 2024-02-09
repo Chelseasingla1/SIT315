@@ -1,0 +1,69 @@
+#include <avr/io.h>
+#include <avr/interrupt.h>
+
+// Pin definitions
+const int tempSensorPin = A0; // Temperature sensor (LM35) connected to A0
+const int ledR = 11;          // Red LED pin
+const int ledG = 12;          // Green LED pin
+const int ledB = 13;          // Blue LED pin
+
+// Variables to store the last state of PORTB for comparison in ISR
+volatile byte lastPortBState;
+
+void setup() {
+  Serial.begin(9600); // Start serial communication
+
+  // Initialize RGB LED pins as outputs
+  pinMode(ledR, OUTPUT);
+  pinMode(ledG, OUTPUT);
+  pinMode(ledB, OUTPUT);
+
+  // Initialize moisture sensor pins as inputs with pullup resistors
+  pinMode(8, INPUT_PULLUP);
+  pinMode(9, INPUT_PULLUP);
+  pinMode(10, INPUT_PULLUP);
+
+  // Save the initial state of PORTB for comparison in the ISR
+  lastPortBState = PINB;
+
+  // Enable pin change interrupt for PORTB (PCINT0 to PCINT7, corresponding to pins 8 to 13 on Arduino Uno)
+  PCICR |= (1 << PCIE0);
+  PCMSK0 |= (1 << PCINT0) | (1 << PCINT1) | (1 << PCINT2); // Enable PCINT for pins 8, 9, and 10
+
+  sei(); // Enable global interrupts
+}
+
+void loop() {
+  // Read temperature from LM35
+  float temperature = readTemperature();
+  Serial.print("Temperature: ");
+  Serial.print(temperature);
+  Serial.println(" °C");
+
+  delay(1000); // Delay between temperature readings
+}
+
+float readTemperature() {
+  int reading = analogRead(tempSensorPin);
+  float voltage = reading * 5.0 / 1023.0; // Convert analog reading to voltage
+  float temperature = voltage * 100.0;    // Convert voltage to temperature in degrees Celsius
+  return temperature;
+}
+
+ISR(PCINT0_vect) {
+  byte currentPortBState = PINB;
+  byte changedBits = currentPortBState ^ lastPortBState;
+  lastPortBState = currentPortBState; // Update for next comparison
+
+  // Determine which sensor triggered the interrupt and set the LED color accordingly
+  // Note: Assuming LOW means moisture detected due to INPUT_PULLUP
+  if (changedBits & (1 << PCINT0)) { // Sensor on pin 8 (Red)
+    digitalWrite(ledR, !(currentPortBState & (1 << PINB0)));
+  }
+  if (changedBits & (1 << PCINT1)) { // Sensor on pin 9 (Green)
+    digitalWrite(ledG, !(currentPortBState & (1 << PINB1)));
+  }
+  if (changedBits & (1 << PCINT2)) { // Sensor on pin 10 (Blue)
+    digitalWrite(ledB, !(currentPortBState & (1 << PINB2)));
+  }
+}
