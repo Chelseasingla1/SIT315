@@ -1,0 +1,35 @@
+// C++ code
+//
+
+const byte LED_PIN = 13;
+const byte METER_PIN = A4;
+unsigned long previousMillis = 0;
+const long interval = 2000; // Blink interval in milliseconds
+
+void setup()
+{
+  pinMode(LED_PIN, OUTPUT);
+  pinMode(METER_PIN, INPUT);
+  Serial.begin(9600);
+  startTimer(0.5); // Set timer frequency to 0.5 Hz (2 seconds)
+}
+
+void loop()
+{ 
+  unsigned long currentMillis = millis();
+  if (currentMillis - previousMillis >= interval) {
+    previousMillis = currentMillis;
+    digitalWrite(LED_PIN, digitalRead(LED_PIN) ^ 1);
+  }
+}
+
+void startTimer(double timerFrequency){
+  noInterrupts();
+  // Calculate and set the correct values for OCRx and TCCRx registers based on timerFrequency
+  // Example: For 0.5 Hz, OCRx = 31249 (assuming 16 MHz clock and prescaler of 256)
+  interrupts();
+}
+
+ISR(TIMER1_COMPA_vect){
+   // Handle timer interrupt here
+}
