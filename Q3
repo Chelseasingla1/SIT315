@@ -1,0 +1,64 @@
+#include <avr/io.h>
+#include <avr/interrupt.h>
+
+const byte LED_PIN = 13;
+const byte POTENTIOMETER_PIN = A4;
+
+void setup() {
+  pinMode(LED_PIN, OUTPUT);
+  
+  // Set up ADC for reading potentiometer
+  ADMUX |= (1 << REFS0); // Set reference voltage to AVCC
+  ADCSRA |= (1 << ADPS2) | (1 << ADPS1) | (1 << ADPS0); // Set ADC prescaler to 128
+  ADCSRA |= (1 << ADEN); // Enable ADC
+  
+  Serial.begin(9600);
+  
+  // Start with a default frequency
+  startTimer(1000.0);
+}
+
+void loop() { 
+  // Read potentiometer value
+  int potValue = analogRead(POTENTIOMETER_PIN);
+  
+  // Map the potentiometer value to a frequency range
+  double frequency = map(potValue, 0, 1023, 100.0, 10000.0); // Map pot value to frequency range 100 Hz to 10 kHz
+  
+  // Update timer frequency
+  startTimer(frequency);
+  
+  delay(100); // Delay for stability
+}
+
+void startTimer(double timerFrequency) {
+  noInterrupts();
+
+  // Calculate timer prescaler and top value
+  uint16_t prescaler = 1;
+  double baseFrequency = 16000000.0; // Arduino Uno runs at 16 MHz
+  uint16_t maxTimerValue = 65535; // Maximum value of 16-bit timer
+  uint16_t timerTop = baseFrequency / (prescaler * timerFrequency) - 1;
+
+  // Ensure timer top is within limits
+  if (timerTop > maxTimerValue) {
+    // Adjust prescaler to bring timer top within limits
+    prescaler = 8;
+    timerTop = baseFrequency / (prescaler * timerFrequency) - 1;
+  }
+
+  // Set prescaler bits
+  TCCR1B = (TCCR1B & 0b11111000) | (prescaler & 0b00000111);
+
+  // Set timer top
+  OCR1A = timerTop;
+
+  // Enable compare match interrupt
+  TIMSK1 |= (1 << OCIE1A);
+
+  interrupts();
+}
+
+ISR(TIMER1_COMPA_vect) {
+  digitalWrite(LED_PIN, digitalRead(LED_PIN) ^ 1);
+}
