@@ -12,8 +12,8 @@ volatile byte lastPortCState;
 
 volatile bool toggleFlag = false;
 
-unsigned long previousMillis = 0;  // Store the last time LED was updated
-const long interval = 1000;        // Interval at which to toggle the timer LED (in milliseconds)
+//unsigned long previousMillis = 0;  // Store the last time LED was updated
+//const long interval = 1000;        // Interval at which to toggle the timer LED (in milliseconds)
 
 volatile int rValue = 0;
 volatile int gValue = 0;
@@ -35,9 +35,9 @@ void setup() {
   lastPortBState = PINB;
    lastPortCState = PINC;
   
-  PCICR |= (1 << PCIE0)| (1 << PCIE1); // Enable pin change interrupt for PORTB
+  PCICR |= (1 << PCIE0)| (1 << PCIE1); // Enable pin change interrupt for PORTB and PORTC
   PCMSK0 |= (1 << PCINT0) | (1 << PCINT1) | (1 << PCINT2); // Enable PCINT for pins 8, 9, and 10
-   PCMSK1 |= (1 << PCINT8); // Enable PCINT for A0 pin (temperature sensor)
+  PCMSK1 |= (1 << PCINT8); // Enable PCINT for A0 pin (temperature sensor)
   
   // Initialize Timer/Counter0 for timer interrupt
   TCCR0A = 0; // Normal mode
@@ -49,9 +49,9 @@ void setup() {
   TCCR1B = 0;
   TCNT1  = 0;
   
-  OCR1A = 31249; // 16MHz / (256 * 2) - 1 = 31249, for 500ms
+  OCR1A = 31249; // 16MHz / (256 * 2) - 1 = 31249, for 2s
   TCCR1B |= (1 << WGM12); // CTC mode
-  TCCR1B |= (1 << CS12); // 256 prescaler
+  TCCR1B |= (1 << CS12); // 256 prescaler // sets the prescalar for Timer/Counter1
   TIMSK1 |= (1 << OCIE1A); // Enable Timer1 Compare A interrupt
   
    
@@ -73,7 +73,7 @@ void loop() {
   Serial.println(analogRead(9));
    digitalWrite(10, HIGH);  // Turn on the LED
   Serial.println("Motion Detected!");
- // delay(1000);
+  delay(1000);
 //digitalWrite(10, LOW);  // Turn off the LED
  // Serial.println("No Motion Detected!");
 //  delay(1000);
@@ -131,6 +131,7 @@ ISR(TIMER1_COMPA_vect) {
   toggleFlag = !toggleFlag;
   digitalWrite(ledT, toggleFlag ? HIGH : LOW);
   
+  
   rValue++;
   gValue++;
   bValue++;
@@ -139,6 +140,7 @@ ISR(TIMER1_COMPA_vect) {
   analogWrite(ledR, rValue);
   analogWrite(ledG, gValue);
   analogWrite(ledB, bValue);
+  
   
 }
 
