@@ -1,0 +1,163 @@
+#include <iostream>
+#include <pthread.h>
+#include <semaphore.h>
+#include <vector>
+#include <queue>
+#include <ctime>
+#include <cstdlib>
+#include <algorithm>
+#include <fstream> // Include for file operations
+#include <unistd.h> // Include for usleep and sleep functions
+
+using namespace std;
+
+const int NUM_SIGNALS = 5; // Number of traffic signals
+const int BUFFER_SIZE = 60; // Bounded buffer size (12 measurements per hour * 5 hours)
+
+// Traffic signal data structure
+struct TrafficSignalData {
+    time_t timestamp;
+    int trafficLightId;
+    int numCarsPassed;
+};
+
+// Congestion record data structure
+struct CongestionRecord {
+    int trafficLightId;
+    int totalCarsPassed;
+
+    // Constructors
+    CongestionRecord() : trafficLightId(0), totalCarsPassed(0) {} // Default constructor
+    CongestionRecord(int id, int carsPassed) : trafficLightId(id), totalCarsPassed(carsPassed) {}
+};
+
+// Bounded buffer class
+class BoundedBuffer {
+private:
+    queue<TrafficSignalData> buffer;
+    sem_t mutex; // Semaphore for mutual exclusion
+    sem_t empty; // Semaphore for empty slots in buffer
+    sem_t full; // Semaphore for filled slots in buffer
+
+public:
+    // Constructor to initialize semaphores
+    BoundedBuffer() {
+        sem_init(&mutex, 0, 1); // Initialize mutex semaphore with initial value 1 (unlocked)
+        sem_init(&empty, 0, BUFFER_SIZE); // Initialize empty semaphore with initial value BUFFER_SIZE
+        sem_init(&full, 0, 0); // Initialize full semaphore with initial value 0
+    }
+
+    // Function to produce data and add to buffer
+    void produce(const TrafficSignalData& data) {
+        sem_wait(&empty); // Wait if there are no empty slots in buffer
+        sem_wait(&mutex); // Acquire mutex to access buffer
+        buffer.push(data); // Add data to buffer
+        sem_post(&mutex); // Release mutex
+        sem_post(&full); // Signal that buffer is not empty
+    }
+
+    // Function to consume data from buffer
+    TrafficSignalData consume() {
+        sem_wait(&full); // Wait if buffer is empty
+        sem_wait(&mutex); // Acquire mutex to access buffer
+        TrafficSignalData data = buffer.front(); // Get data from buffer
+        buffer.pop(); // Remove data from buffer
+        sem_post(&mutex); // Release mutex
+        sem_post(&empty); // Signal that buffer has an empty slot
+        return data; // Return consumed data
+    }
+};
+
+// Global bounded buffer
+BoundedBuffer buffer;
+
+// Function to read traffic signal data from a text file
+vector<TrafficSignalData> readTrafficDataFromFile(const string& filename) {
+    vector<TrafficSignalData> data;
+    ifstream file(filename); // Open file for reading
+    if (file.is_open()) {
+        TrafficSignalData signalData;
+        while (file >> signalData.timestamp >> signalData.trafficLightId >> signalData.numCarsPassed) {
+            data.push_back(signalData); // Add data to vector
+        }
+        file.close(); // Close file
+    } else {
+        cerr << "Error opening file " << filename << endl;
+    }
+    return data;
+}
+
+// Function to simulate traffic producers
+void* trafficProducer(void* arg) {
+    vector<TrafficSignalData>* trafficData = (vector<TrafficSignalData>*)arg;
+    for (const auto& data : *trafficData) {
+        buffer.produce(data); // Add data to buffer
+        usleep(5 * 60 * 1000 * 1000); // Simulate 5 minutes delay
+    }
+    pthread_exit(NULL); // Exit thread
+}
+
+// Function to simulate traffic consumers
+void* trafficConsumer(void* arg) {
+    vector<CongestionRecord> congestions; // Vector to store congestion records
+    while (true) { // Infinite loop for continuous consumption
+        vector<CongestionRecord> currentCongestions; // Vector to store current congestions
+        for (int i = 0; i < NUM_SIGNALS; ++i) { // Consume data for all traffic signals
+            TrafficSignalData data = buffer.consume(); // Consume data from buffer
+            // Print consumed data
+            cout << "Consumer consumed data - Timestamp: " << data.timestamp
+                 << ", Traffic Light ID: " << data.trafficLightId
+                 << ", Number of Cars Passed: " << data.numCarsPassed << endl;
+            // Check if record already exists for this traffic light
+            auto it = find_if(congestions.begin(), congestions.end(), [&](const CongestionRecord& record) {
+                return record.trafficLightId == data.trafficLightId;
+            });
+            if (it != congestions.end()) { // If record exists, update total cars passed
+                it->totalCarsPassed += data.numCarsPassed;
+            } else { // If record doesn't exist, create a new one
+                currentCongestions.emplace_back(data.trafficLightId, data.numCarsPassed);
+            }
+        }
+        // Combine current congestions with overall congestions
+        congestions.insert(congestions.end(), currentCongestions.begin(), currentCongestions.end());
+        // Sort congestions by total cars passed
+        sort(congestions.begin(), congestions.end(), [](const CongestionRecord& a, const CongestionRecord& b) {
+            return a.totalCarsPassed > b.totalCarsPassed;
+        });
+        // Keep only top N congestions (top 5 in this case)
+        if (congestions.size() > 5) {
+            congestions.resize(5);
+        }
+        // Print top congested traffic lights
+        cout << "Top 5 congested traffic lights:" << endl;
+        for (const auto& congestion : congestions) {
+            cout << "Traffic Light ID: " << congestion.trafficLightId << ", Total Cars Passed: " << congestion.totalCarsPassed << endl;
+        }
+        // Simulate 1 hour delay
+        sleep(3600); // 1 hour in seconds
+    }
+    pthread_exit(NULL); // Exit thread
+}
+
+int main() {
+    srand(time(nullptr)); // Seed random number generator
+    vector<TrafficSignalData> trafficData = readTrafficDataFromFile("traffic_data.txt"); // Read traffic data from file
+    pthread_t producers[NUM_SIGNALS]; // Array to store producer threads
+    pthread_t consumer; // Consumer thread
+    
+    // Create producer threads
+    for (int i = 0; i < NUM_SIGNALS; ++i) {
+        pthread_create(&producers[i], NULL, trafficProducer, (void*)&trafficData); // Create thread for each producer
+    }
+    // Create consumer thread
+    pthread_create(&consumer, NULL, trafficConsumer, NULL); // Create thread for consumer
+    
+    // Join producer threads
+    for (int i = 0; i < NUM_SIGNALS; ++i) {
+        pthread_join(producers[i], NULL); // Wait for each producer thread to finish
+    }
+    // Join consumer thread
+    pthread_join(consumer, NULL); // Wait for consumer thread to finish
+
+    return 0; // Return success
+}
