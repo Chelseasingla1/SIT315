@@ -1,0 +1,154 @@
+#include <avr/io.h>
+#include <avr/interrupt.h>
+
+const int tempSensorPin = A0; // Temperature sensor (LM35) connected to A0
+const int ledR = 11;          // Red LED pin
+const int ledG = 12;          // Green LED pin
+const int ledB = 13;          // Blue LED pin
+const int ledT = 5;           // Timer LED pin
+ 
+volatile byte lastPortBState;
+volatile byte lastPortCState;
+
+volatile bool toggleFlag = false;
+
+//unsigned long previousMillis = 0;  // Store the last time LED was updated
+//const long interval = 1000;        // Interval at which to toggle the timer LED (in milliseconds)
+
+volatile int rValue = 0;
+volatile int gValue = 0;
+volatile int bValue = 0;
+
+
+void setup() {
+  Serial.begin(9600); // Start serial communication
+  
+  pinMode(ledR, OUTPUT);
+  pinMode(ledG, OUTPUT);
+  pinMode(ledB, OUTPUT);
+  pinMode(ledT, OUTPUT); // Added for timer LED
+  pinMode(8, INPUT);
+  pinMode(9, INPUT);
+  pinMode(10, INPUT);
+   pinMode(tempSensorPin, INPUT); // Temperature sensor pin
+  
+  lastPortBState = PINB;
+   lastPortCState = PINC;
+  
+  PCICR |= (1 << PCIE0)| (1 << PCIE1); // Enable pin change interrupt for PORTB and PORTC
+  PCMSK0 |= (1 << PCINT0) | (1 << PCINT1) | (1 << PCINT2); // Enable PCINT for pins 8, 9, and 10
+  PCMSK1 |= (1 << PCINT8); // Enable PCINT for A0 pin (temperature sensor)
+  
+  // Initialize Timer/Counter0 for timer interrupt
+  TCCR0A = 0; // Normal mode
+  TCCR0B = (1 << CS02) | (1 << CS00); // Set prescaler to 1024
+  TIMSK0 |= (1 << TOIE0); // Enable Timer/Counter0 Overflow Interrupt
+  
+  
+  TCCR1A = 0;
+  TCCR1B = 0;
+  TCNT1  = 0;
+  
+  OCR1A = 31249; // 16MHz / (256 * 2) - 1 = 31249, for 2s
+  TCCR1B |= (1 << WGM12); // CTC mode
+  TCCR1B |= (1 << CS12); // 256 prescaler // sets the prescalar for Timer/Counter1
+  TIMSK1 |= (1 << OCIE1A); // Enable Timer1 Compare A interrupt
+  
+   
+  
+  sei(); // Enable global interrupts
+}
+
+void loop() {
+  // Read temperature from LM35
+  float temperature = readTemperature();
+ Serial.print("Temperature: ");
+ Serial.print(temperature);
+ Serial.println(" °C");
+
+   digitalWrite(9, HIGH); // Turn on the PIR LED
+  delay(1000);
+   digitalWrite(9, LOW);
+   Serial.print("Soil Moisture Detected - Value: ");
+  Serial.println(analogRead(9));
+   digitalWrite(10, HIGH);  // Turn on the LED
+  Serial.println("Motion Detected!");
+  delay(1000);
+//digitalWrite(10, LOW);  // Turn off the LED
+ // Serial.println("No Motion Detected!");
+//  delay(1000);
+
+ // Serial.println(analogRead(moistureSensorPin));
+  // Other tasks can be performed here
+
+  delay(1000); // Delay between temperature readings
+}
+
+float readTemperature() {
+  int reading = analogRead(tempSensorPin);
+  float voltage = reading * 5.0 / 1023.0; // Convert analog reading to voltage
+  float temperature = voltage * 100.0;    // Convert voltage to temperature in degrees Celsius
+  return temperature;
+}
+
+
+ISR(PCINT0_vect) {
+  byte currentPortBState = PINB;
+  byte changedBits = currentPortBState ^ lastPortBState;
+  lastPortBState = currentPortBState; // Update for next comparison
+  
+  if (changedBits & (1 << PCINT0)) { // Sensor on pin 8 (Red)
+    digitalWrite(ledR, !(currentPortBState & (1 << PINB0)));
+  }
+  if (changedBits & (1 << PCINT1)) { // Sensor on pin 9 (Green)
+    digitalWrite(ledG, !(currentPortBState & (1 << PINB1)));
+  }
+  if (changedBits & (1 << PCINT2)) { // Sensor on pin 10 (Blue)
+    digitalWrite(ledB, !(currentPortBState & (1 << PINB2)));
+  }
+   if (digitalRead(10)) { // PIR sensor on pin 10 (detects motion)
+    // Motion detected, you can add your action here
+    // For example, you can toggle the timer LED
+    digitalWrite(ledT, !digitalRead(ledT));
+  }
+}
+ISR(PCINT1_vect) {
+  byte currentPortCState = PINC;
+  byte changedBits = currentPortCState ^ lastPortCState;
+  lastPortCState = currentPortCState; // Update for next comparison
+
+  if (changedBits & (1 << PCINT8)) { // Temperature sensor on A0 pin
+    float temperature = readTemperature();
+    Serial.print("Temperature: ");
+    Serial.print(temperature);
+    Serial.println(" °C");
+    // You can add your actions based on the temperature reading here
+  }
+}
+
+ISR(TIMER1_COMPA_vect) {
+   //Toggle the LED
+  toggleFlag = !toggleFlag;
+  digitalWrite(ledT, toggleFlag ? HIGH : LOW);
+  
+  
+  rValue++;
+  gValue++;
+  bValue++;
+
+  // Update the LED colors
+  analogWrite(ledR, rValue);
+  analogWrite(ledG, gValue);
+  analogWrite(ledB, bValue);
+  
+  
+}
+
+// Remove the ISR(TIMER0_OVF_vect) definition to avoid multiple definitions
+// ISR(TIMER0_OVF_vect) { // Timer/Counter0 Overflow Interrupt
+//   unsigned long currentMillis = millis();
+//   if (currentMillis - previousMillis >= interval) {
+//     previousMillis = currentMillis;
+//     digitalWrite(ledT, !digitalRead(ledT)); // Toggle timer LED
+//   }
+// }

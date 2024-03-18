@@ -1,0 +1,75 @@
+// Analog pin where the temperature sensor is connected
+int pirSensorPin = 10;
+
+// Pin with which the LED is connected for high temperature
+int ledPinpir = 13; // Built-in LED on most Arduino boards
+
+// Pin with which the moisture sensor is connected
+int moistureSensorPin = 2; // Digital pin 2
+
+// Pin with which the LED is connected for moisture
+int ledPinMoisture = 7; // Digital pin 7
+
+volatile bool moistureInterrupt = false;
+volatile bool pirInterrupt = false;
+
+void setup() {
+  // Initialize serial communication at 9600 baud
+  Serial.begin(9600);
+
+  // LED pins as outputs
+  pinMode(ledPinpir, OUTPUT);
+  pinMode(ledPinMoisture, OUTPUT);
+
+  // Moisture sensor pin as an input
+  pinMode(moistureSensorPin, INPUT);
+
+  // Enable the internal pull-up resistor for the moisture sensor pin
+  digitalWrite(moistureSensorPin, HIGH);
+
+  // PIR sensor pin as an input
+  pinMode(pirSensorPin, INPUT);
+
+  // Enable the internal pull-up resistor for the PIR sensor pin
+  digitalWrite(pirSensorPin, HIGH);
+
+  // Attach interrupts for the sensors
+  attachInterrupt(digitalPinToInterrupt(moistureSensorPin), moistureInterruptHandler, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(pirSensorPin), pirInterruptHandler, CHANGE);
+}
+
+void loop() {
+ 
+   // Serial.println("Moisture level is low. Interrupting pir reading.");
+    digitalWrite(ledPinpir, HIGH); // Turn on the moisture LED
+  delay(1000);
+  Serial.println("Motion Detected!");
+
+   // delay(1000); // Blink LED for 1 second
+    digitalWrite(ledPinpir, LOW); // Turn off the moisture LED
+  Serial.println("No Motion Detected!");
+   delay(1000);
+
+  //  moistureInterrupt = false; // Reset the interrupt flag
+ 
+ 
+    //Serial.println("PIR sensor detected motion. Interrupting moisture reading.");
+    digitalWrite(ledPinMoisture, HIGH); // Turn on the PIR LED
+  delay(1000);
+   digitalWrite(ledPinMoisture, LOW);
+   Serial.print("Soil Moisture Detected - Value: ");
+  Serial.println(analogRead(moistureSensorPin));
+
+   // delay(1000); // Blink LED for 1 second
+   // pirInterrupt = false; // Reset the interrupt flag
+  
+  delay(1000); // Wait for a second before reading again
+}
+
+void moistureInterruptHandler() {
+  moistureInterrupt = true;
+}
+
+void pirInterruptHandler() {
+  pirInterrupt = true;
+}
