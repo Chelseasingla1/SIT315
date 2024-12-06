@@ -1,0 +1,39 @@
+// Variable to store moisture level
+int moisture = 0;
+
+// Setup function runs once at the beginning
+void setup()
+{
+  
+  // Set A0 pin as OUTPUT to power the soil moisture sensor
+  pinMode(A0, OUTPUT);
+  // Set A1 pin as INPUT to read the analog value from the soil moisture sensor
+  pinMode(A1, INPUT);
+  // Initialize serial communication at 9600 baud rate for debugging
+  Serial.begin(9600);
+  // Set pin 8 as OUTPUT to control LED
+  pinMode(8, OUTPUT);
+}
+
+// Loop function runs repeatedly
+void loop()
+{
+  // Apply power to the soil moisture sensor
+  digitalWrite(A0, HIGH);
+  delay(10); // Wait for 10 millisecond to stabilize the sensor reading
+  moisture = analogRead(A1);   // Read analog value from the soil moisture sensor
+  // Turn off the sensor to reduce metal corrosion over time
+  digitalWrite(A0, LOW);
+  // Print the moisture value to the Serial Monitor for debugging
+  Serial.println(moisture);
+  // Turn off the external device connected to pin 8
+  digitalWrite(8, LOW);
+  // Check if moisture level is greater than 600
+  if (moisture >600) {
+     // If moisture is high, turn on the external device connected to pin 8
+          digitalWrite(8, HIGH);
+        }
+      
+   
+  delay(100); // Wait for 100 millisecond(s)
+}
